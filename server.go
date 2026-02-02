@@ -18,14 +18,13 @@ type Config struct {
 	DBPath string
 }
 
-// Request structure from .bat script
+// Request structure from .bat script - now supports dynamic fields
 type FileReport struct {
-	HostName    string      `json:"host_name"`
-	HostIP      string      `json:"host_ip"`
-	Timestamp   string      `json:"timestamp"`
-	BasePath    string      `json:"base_path"`
-	Directories []Directory `json:"directories"`
-	Totals      Totals      `json:"totals"`
+	HostIP           string      `json:"host_ip"`
+	Timestamp        string      `json:"timestamp"`
+	BasePath         string      `json:"base_path"`
+	Directories      []Directory `json:"directories"`
+	TotalDirectories int         `json:"total_directories"`
 }
 
 type Directory struct {
@@ -33,14 +32,6 @@ type Directory struct {
 	FileCount int    `json:"file_count"`
 	SizeBytes int64  `json:"size_bytes"`
 	SizeMB    int    `json:"size_mb"`
-}
-
-type Totals struct {
-	TotalDirectories int   `json:"total_directories"`
-	TotalFiles       int   `json:"total_files"`
-	TotalSizeBytes   int64 `json:"total_size_bytes"`
-	TotalSizeMB      int   `json:"total_size_mb"`
-	TotalSizeGB      int   `json:"total_size_gb"`
 }
 
 // Database models
@@ -68,16 +59,12 @@ func initDB(dbPath string) error {
 	// Create reports table
 	createReportsTable := `CREATE TABLE IF NOT EXISTS file_reports (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		host_name TEXT NOT NULL,
 		host_ip TEXT NOT NULL,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
 		base_path TEXT,
 		total_directories INTEGER,
-		total_files INTEGER,
-		total_size_bytes INTEGER,
-		total_size_mb INTEGER,
-		total_size_gb INTEGER,
-		report_data TEXT
+		report_data TEXT,
+		UNIQUE(host_ip, timestamp)
 	);`
 
 	_, err = db.Exec(createReportsTable)
@@ -101,45 +88,137 @@ func initDB(dbPath string) error {
 		return err
 	}
 
+	// Create audit log table
+	createAuditLog := `CREATE TABLE IF NOT EXISTS audit_logs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		host_ip TEXT,
+		action TEXT,
+		status TEXT,
+		message TEXT,
+		details TEXT
+	);`
+
+	_, err = db.Exec(createAuditLog)
+	if err != nil {
+		return err
+	}
+
 	// Create index for faster queries
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_host_ip ON file_reports(host_ip);")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timestamp ON file_reports(timestamp);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_audit_host ON audit_logs(host_ip);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_audit_date ON audit_logs(created_at);")
 
 	log.Println("Database initialized successfully")
 	return nil
 }
 
-// Save file report to database
+// Write audit log to database
+func writeAuditLog(hostIP, action, status, message, details string) {
+	insertSQL := `INSERT INTO audit_logs (host_ip, action, status, message, details) 
+		VALUES (?, ?, ?, ?, ?)`
+
+	_, err := db.Exec(insertSQL, hostIP, action, status, message, details)
+	if err != nil {
+		log.Printf("Error writing audit log: %v", err)
+	}
+
+	// Also write to text file
+	logFile := "audit_logs.txt"
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	logLine := fmt.Sprintf("[%s] %s | %s | %s | %s\n", timestamp, hostIP, action, status, message)
+
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err == nil {
+		defer f.Close()
+		f.WriteString(logLine)
+	}
+}
+
+// Save file report to database with validation and deduplication
 func saveFileReport(report FileReport) (int64, error) {
+	// Check if host exists and has recent data with same size
+	var existingID int64
+	var existingReportData string
+
+	err := db.QueryRow(`
+		SELECT id, report_data FROM file_reports 
+		WHERE host_ip = ? 
+		ORDER BY timestamp DESC 
+		LIMIT 1
+	`, report.HostIP).Scan(&existingID, &existingReportData)
+
+	// If host exists, check if data is identical
+	if err == nil {
+		var existingReport FileReport
+		err := json.Unmarshal([]byte(existingReportData), &existingReport)
+		if err == nil {
+			// Calculate total size from directories
+			newTotalSize := int64(0)
+			for _, d := range report.Directories {
+				newTotalSize += d.SizeBytes
+			}
+
+			existingTotalSize := int64(0)
+			for _, d := range existingReport.Directories {
+				existingTotalSize += d.SizeBytes
+			}
+
+			// If sizes are same, skip the report
+			if newTotalSize == existingTotalSize {
+				writeAuditLog(report.HostIP, "RECEIVE", "SKIPPED",
+					"Data identical to last report, skipped", "")
+				return existingID, nil
+			}
+
+			// Sizes are different, update the data
+			writeAuditLog(report.HostIP, "UPDATE", "SUCCESS",
+				fmt.Sprintf("Data changed: %d MB -> %d MB", existingTotalSize/1048576, newTotalSize/1048576), "")
+		}
+	} else if err != sql.ErrNoRows {
+		// Log other database errors
+		writeAuditLog(report.HostIP, "VALIDATE", "ERROR", "Database error checking existing data", err.Error())
+		return 0, err
+	} else {
+		// New host
+		writeAuditLog(report.HostIP, "RECEIVE", "NEW_HOST", "New host registered", "")
+	}
+
 	// Convert report to JSON for storage
 	reportJSON, err := json.Marshal(report)
 	if err != nil {
+		writeAuditLog(report.HostIP, "SAVE", "ERROR", "Failed to marshal JSON", err.Error())
 		return 0, err
+	}
+
+	// Calculate total files and size
+	totalFiles := 0
+	totalSize := int64(0)
+	for _, dir := range report.Directories {
+		totalFiles += dir.FileCount
+		totalSize += dir.SizeBytes
 	}
 
 	// Insert main report
 	insertSQL := `INSERT INTO file_reports 
-		(host_name, host_ip, base_path, total_directories, total_files, 
-		total_size_bytes, total_size_mb, total_size_gb, report_data)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		(host_ip, base_path, total_directories, report_data)
+		VALUES (?, ?, ?, ?)`
 
 	result, err := db.Exec(insertSQL,
-		report.HostName,
 		report.HostIP,
 		report.BasePath,
-		report.Totals.TotalDirectories,
-		report.Totals.TotalFiles,
-		report.Totals.TotalSizeBytes,
-		report.Totals.TotalSizeMB,
-		report.Totals.TotalSizeGB,
+		report.TotalDirectories,
 		string(reportJSON))
 
 	if err != nil {
+		writeAuditLog(report.HostIP, "SAVE", "ERROR", "Failed to insert report", err.Error())
 		return 0, err
 	}
 
 	reportID, err := result.LastInsertId()
 	if err != nil {
+		writeAuditLog(report.HostIP, "SAVE", "ERROR", "Failed to get report ID", err.Error())
 		return 0, err
 	}
 
@@ -184,14 +263,22 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 	reportID, err := saveFileReport(report)
 	if err != nil {
 		log.Printf("Database error: %v", err)
+		writeAuditLog(report.HostIP, "RECEIVE", "ERROR", "Failed to save report", err.Error())
 		http.Error(w, "Failed to save report", http.StatusInternalServerError)
 		return
 	}
 
+	// Calculate totals for logging
+	totalFiles := 0
+	totalSize := int64(0)
+	for _, dir := range report.Directories {
+		totalFiles += dir.FileCount
+		totalSize += dir.SizeBytes
+	}
+
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	log.Printf("[%s] Report received from %s (%s) - ID: %d - Files: %d, Size: %d MB",
-		timestamp, report.HostName, report.HostIP, reportID,
-		report.Totals.TotalFiles, report.Totals.TotalSizeMB)
+	log.Printf("[%s] Report received from %s - ID: %d - Directories: %d, Files: %d, Size: %d MB",
+		timestamp, report.HostIP, reportID, report.TotalDirectories, totalFiles, totalSize/1048576)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -238,15 +325,13 @@ func debugHandler(w http.ResponseWriter, r *http.Request) {
 
 // Get all hosts summary
 func getHostsHandler(w http.ResponseWriter, r *http.Request) {
+	// Get the latest report for each host
 	query := `
 		SELECT 
-			host_name,
 			host_ip,
-			timestamp as last_report,
-			total_files,
-			total_size_mb,
-			total_size_gb,
-			COUNT(*) OVER (PARTITION BY host_ip) as report_count
+			timestamp,
+			report_data,
+			total_directories
 		FROM file_reports
 		WHERE (host_ip, timestamp) IN (
 			SELECT host_ip, MAX(timestamp) FROM file_reports GROUP BY host_ip
@@ -256,26 +341,81 @@ func getHostsHandler(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query(query)
 	if err != nil {
-		log.Printf("Database query error: %v, Query: %s", err, query)
+		log.Printf("Database query error: %v", err)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		json.NewEncoder(w).Encode(make([]interface{}, 0))
 		return
 	}
 	defer rows.Close()
 
-	hosts := make([]HostSummary, 0)
+	hosts := make([]map[string]interface{}, 0)
+	hostCountMap := make(map[string]int)
+
 	for rows.Next() {
-		var host HostSummary
-		err := rows.Scan(&host.HostName, &host.HostIP, &host.LastReport,
-			&host.TotalFiles, &host.TotalSizeMB, &host.TotalSizeGB, &host.ReportCount)
+		var hostIP, timestamp, reportDataStr string
+		var totalDirs int
+		err := rows.Scan(&hostIP, &timestamp, &reportDataStr, &totalDirs)
 		if err != nil {
 			log.Printf("Row scan error: %v", err)
 			continue
 		}
-		hosts = append(hosts, host)
+
+		// Parse JSON report
+		var report FileReport
+		err = json.Unmarshal([]byte(reportDataStr), &report)
+		if err != nil {
+			log.Printf("JSON parse error: %v", err)
+			continue
+		}
+
+		// Calculate totals from directories
+		totalFiles := 0
+		totalSizeBytes := int64(0)
+		totalSizeMB := 0
+		totalSizeGB := 0
+
+		for _, dir := range report.Directories {
+			totalFiles += dir.FileCount
+			totalSizeBytes += dir.SizeBytes
+		}
+
+		if totalSizeBytes > 0 {
+			totalSizeMB = int(totalSizeBytes / 1048576)
+			totalSizeGB = int(totalSizeBytes / 1073741824)
+		}
+
+		// Count reports per host
+		hostCountMap[hostIP]++
+
+		hosts = append(hosts, map[string]interface{}{
+			"host_ip":       hostIP,
+			"last_report":   timestamp,
+			"total_files":   totalFiles,
+			"total_size_mb": totalSizeMB,
+			"total_size_gb": totalSizeGB,
+			"report_count":  hostCountMap[hostIP],
+		})
 	}
 
-	log.Printf("Returning %d hosts from API", len(hosts))
+	// Get accurate report counts
+	countQuery := `SELECT host_ip, COUNT(*) as count FROM file_reports GROUP BY host_ip`
+	countRows, err := db.Query(countQuery)
+	if err == nil {
+		defer countRows.Close()
+		for countRows.Next() {
+			var hostIP string
+			var count int
+			if err := countRows.Scan(&hostIP, &count); err == nil {
+				for i, host := range hosts {
+					if host["host_ip"] == hostIP {
+						hosts[i]["report_count"] = count
+						break
+					}
+				}
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(hosts)
 }
@@ -294,8 +434,7 @@ func getHostReportsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := db.Query(`
-		SELECT id, host_name, host_ip, timestamp, total_files, 
-			   total_size_mb, total_size_gb, report_data
+		SELECT id, host_ip, timestamp, report_data, total_directories
 		FROM file_reports
 		WHERE host_ip = ?
 		ORDER BY timestamp DESC
@@ -310,25 +449,40 @@ func getHostReportsHandler(w http.ResponseWriter, r *http.Request) {
 	var reports []map[string]interface{}
 	for rows.Next() {
 		var id int
-		var hostName, hostIP, reportData string
+		var hostIPVal, reportDataStr string
 		var timestamp time.Time
-		var totalFiles, totalSizeMB, totalSizeGB int
+		var totalDirs int
 
-		err := rows.Scan(&id, &hostName, &hostIP, &timestamp,
-			&totalFiles, &totalSizeMB, &totalSizeGB, &reportData)
+		err := rows.Scan(&id, &hostIPVal, &timestamp, &reportDataStr, &totalDirs)
 		if err != nil {
 			continue
 		}
 
+		// Parse report_data JSON
+		var report FileReport
+		var totalFiles int
+		var totalSizeBytes int64
+		totalSizeMB := 0
+		totalSizeGB := 0.0
+
+		if err := json.Unmarshal([]byte(reportDataStr), &report); err == nil {
+			for _, dir := range report.Directories {
+				totalFiles += dir.FileCount
+				totalSizeBytes += dir.SizeBytes
+			}
+			totalSizeMB = int(totalSizeBytes / (1024 * 1024))
+			totalSizeGB = float64(totalSizeBytes) / (1024 * 1024 * 1024)
+		}
+
 		reports = append(reports, map[string]interface{}{
-			"id":            id,
-			"host_name":     hostName,
-			"host_ip":       hostIP,
-			"timestamp":     timestamp,
-			"total_files":   totalFiles,
-			"total_size_mb": totalSizeMB,
-			"total_size_gb": totalSizeGB,
-			"report_data":   reportData,
+			"id":                id,
+			"host_ip":           hostIPVal,
+			"timestamp":         timestamp,
+			"total_directories": totalDirs,
+			"total_files":       totalFiles,
+			"total_size_mb":     totalSizeMB,
+			"total_size_gb":     totalSizeGB,
+			"directories":       report.Directories,
 		})
 	}
 
@@ -354,6 +508,77 @@ func getReportDetailsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(reportData))
+}
+
+// Get audit logs API
+func getLogsHandler(w http.ResponseWriter, r *http.Request) {
+	action := r.URL.Query().Get("action")
+	hostIP := r.URL.Query().Get("host_ip")
+	limit := r.URL.Query().Get("limit")
+	if limit == "" {
+		limit = "100"
+	}
+
+	query := `SELECT id, created_at, host_ip, action, status, message, details FROM audit_logs WHERE 1=1`
+	var args []interface{}
+
+	if action != "" {
+		query += " AND action = ?"
+		args = append(args, action)
+	}
+	if hostIP != "" {
+		query += " AND host_ip = ?"
+		args = append(args, hostIP)
+	}
+
+	query += " ORDER BY created_at DESC LIMIT ?"
+	args = append(args, limit)
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	var logs []map[string]interface{}
+	for rows.Next() {
+		var id int
+		var createdAt, hostIP, action, status, message, details string
+		err := rows.Scan(&id, &createdAt, &hostIP, &action, &status, &message, &details)
+		if err != nil {
+			continue
+		}
+		logs = append(logs, map[string]interface{}{
+			"id":         id,
+			"created_at": createdAt,
+			"host_ip":    hostIP,
+			"action":     action,
+			"status":     status,
+			"message":    message,
+			"details":    details,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(logs)
+}
+
+// Logs page handler - serves the logs.html file
+func logsPageHandler(w http.ResponseWriter, r *http.Request) {
+	htmlContent, err := os.ReadFile("logs.html")
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "Logs file not found. Place logs.html in the same directory as the executable.",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(htmlContent)
 }
 
 // Middleware to add CORS headers
@@ -423,10 +648,12 @@ func main() {
 	mux.HandleFunc("/api/hosts", getHostsHandler)
 	mux.HandleFunc("/api/host/reports", getHostReportsHandler)
 	mux.HandleFunc("/api/report/details", getReportDetailsHandler)
+	mux.HandleFunc("/api/logs", getLogsHandler)
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/debug", debugHandler)
 
-	// Dashboard
+	// Pages
+	mux.HandleFunc("/logs", logsPageHandler)
 	mux.HandleFunc("/", dashboardHandler)
 
 	// Wrap with CORS middleware
@@ -439,6 +666,7 @@ func main() {
 	fmt.Printf("Database: %s\n\n", config.DBPath)
 	fmt.Printf("Endpoints:\n")
 	fmt.Printf("  Dashboard:  http://localhost:%s/\n", config.Port)
+	fmt.Printf("  Logs:       http://localhost:%s/logs\n", config.Port)
 	fmt.Printf("  API:        http://localhost:%s/command\n", config.Port)
 	fmt.Printf("  Health:     http://localhost:%s/health\n\n", config.Port)
 

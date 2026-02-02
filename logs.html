@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Logs</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        h1 { color: #333; }
+        .nav-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: #2196F3;
+            color: white;
+            border-radius: 4px;
+            text-decoration: none;
+        }
+        .nav-link:hover { background: #1976D2; }
+        .controls { margin-bottom: 20px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .control-group { display: inline-block; margin-right: 20px; }
+        label { margin-right: 5px; font-weight: bold; }
+        input, select { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #45a049; }
+        .export-btn { background: #2196F3; }
+        .export-btn:hover { background: #1976D2; }
+        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 20px; }
+        th { background: #f5f5f5; padding: 12px; text-align: left; border-bottom: 2px solid #ddd; font-weight: bold; }
+        td { padding: 12px; border-bottom: 1px solid #eee; }
+        tr:hover { background: #f9f9f9; }
+        .status-success { color: #4CAF50; font-weight: bold; }
+        .status-error { color: #f44336; font-weight: bold; }
+        .status-warning { color: #ff9800; font-weight: bold; }
+        .status-skipped { color: #9C27B0; font-weight: bold; }
+        .loading { text-align: center; padding: 20px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Connection Logs</h1>
+            <a href="/" class="nav-link">← Back to Dashboard</a>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Host IP:</label>
+                <input type="text" id="filterHost" placeholder="192.168.1.100">
+            </div>
+            <div class="control-group">
+                <label>Action:</label>
+                <select id="filterAction">
+                    <option value="">All Actions</option>
+                    <option value="RECEIVE">RECEIVE</option>
+                    <option value="UPDATE">UPDATE</option>
+                    <option value="VALIDATE">VALIDATE</option>
+                    <option value="SAVE">SAVE</option>
+                    <option value="NEW_HOST">NEW_HOST</option>
+                    <option value="SKIPPED">SKIPPED</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Status:</label>
+                <select id="filterStatus">
+                    <option value="">All Status</option>
+                    <option value="SUCCESS">SUCCESS</option>
+                    <option value="ERROR">ERROR</option>
+                    <option value="SKIPPED">SKIPPED</option>
+                </select>
+            </div>
+            <button onclick="loadLogs()">🔍 Filter</button>
+            <button onclick="exportCSV()" class="export-btn">📥 Export CSV</button>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Host IP</th>
+                    <th>Action</th>
+                    <th>Status</th>
+                    <th>Message</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody id="logsTable">
+                <tr><td colspan="6" style="text-align: center; padding: 40px;">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let allLogs = [];
+        const API_URL = 'http://localhost:5555';
+
+        async function loadLogs() {
+            const host = document.getElementById('filterHost').value;
+            const action = document.getElementById('filterAction').value;
+            const status = document.getElementById('filterStatus').value;
+
+            let url = API_URL + '/api/logs?limit=1000';
+            if (host) url += '&host_ip=' + encodeURIComponent(host);
+            if (action) url += '&action=' + encodeURIComponent(action);
+
+            try {
+                const response = await fetch(url);
+                const logs = await response.json() || [];
+                allLogs = logs;
+
+                // Filter by status if specified
+                let filtered = logs;
+                if (status) {
+                    filtered = logs.filter(l => l.status === status);
+                }
+
+                displayLogs(filtered);
+            } catch (error) {
+                console.error('Error loading logs:', error);
+                document.getElementById('logsTable').innerHTML = '<tr><td colspan="6" style="color: red;">Error loading logs. Check if server is running.</td></tr>';
+            }
+        }
+
+        function displayLogs(logs) {
+            const tbody = document.getElementById('logsTable');
+            if (!logs || logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">No logs found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = logs.map(log => {
+                let statusClass = 'status-' + log.status.toLowerCase();
+                return `
+                    <tr>
+                        <td>${new Date(log.created_at).toLocaleString()}</td>
+                        <td><code>${log.host_ip}</code></td>
+                        <td><strong>${log.action}</strong></td>
+                        <td><span class="${statusClass}">${log.status}</span></td>
+                        <td>${log.message}</td>
+                        <td><small>${log.details || '-'}</small></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function exportCSV() {
+            if (allLogs.length === 0) {
+                alert('No logs to export');
+                return;
+            }
+
+            let csv = 'Timestamp,Host IP,Action,Status,Message,Details\n';
+            allLogs.forEach(log => {
+                csv += `"${log.created_at}","${log.host_ip}","${log.action}","${log.status}","${log.message}","${(log.details || '').replace(/"/g, '""')}"\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'audit_logs_' + new Date().getTime() + '.csv';
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        // Load logs on page load
+        loadLogs();
+        
+        // Refresh every 30 seconds
+        setInterval(loadLogs, 30000);
+    </script>
+</body>
+</html>
