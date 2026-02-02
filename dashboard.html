@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>File Report Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { 
+            color: #333; 
+            margin-bottom: 30px;
+            font-size: 32px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stat-card h3 {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .host-card {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .host-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        .host-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        .host-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        .host-ip {
+            font-size: 13px;
+            color: #999;
+            font-family: 'Courier New', monospace;
+        }
+        .host-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        .host-stat {
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        .host-stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .host-stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .last-report {
+            color: #999;
+            font-size: 13px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        .refresh-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        .refresh-btn:hover {
+            background: #45a049;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            margin: 50px auto;
+            padding: 30px;
+            width: 90%;
+            max-width: 1000px;
+            max-height: 80vh;
+            overflow-y: auto;
+            border-radius: 8px;
+        }
+        .close {
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #999;
+        }
+        .close:hover { color: #333; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+        tr:hover { background: #f9f9f9; }
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        button:hover {
+            background: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 File Report Dashboard</h1>
+        
+        <div class="error" id="errorMsg"></div>
+        
+        <button class="refresh-btn" onclick="loadDashboard()">🔄 Refresh</button>
+        
+        <div class="stats-grid" id="globalStats">
+            <div class="loading">Loading...</div>
+        </div>
+        
+        <div id="hostsList"></div>
+    </div>
+
+    <!-- Modal for detailed view -->
+    <div id="detailModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5555';
+
+        async function loadDashboard() {
+            document.getElementById('errorMsg').style.display = 'none';
+            document.getElementById('globalStats').innerHTML = '<div class="loading">Loading...</div>';
+            document.getElementById('hostsList').innerHTML = '';
+            
+            try {
+                const response = await fetch(API_URL + '/api/hosts');
+                if (!response.ok) throw new Error('Failed to fetch hosts');
+                
+                const hosts = await response.json();
+                
+                if (!hosts || hosts.length === 0) {
+                    document.getElementById('hostsList').innerHTML = '<p style="text-align: center; color: #999;">No hosts found. Submit a file report to get started.</p>';
+                    displayGlobalStats([]);
+                } else {
+                    displayGlobalStats(hosts);
+                    displayHosts(hosts);
+                }
+            } catch (error) {
+                showError('Error loading dashboard: ' + error.message);
+                console.error('Error:', error);
+            }
+        }
+
+        function displayGlobalStats(hosts) {
+            const totalHosts = hosts.length;
+            const totalFiles = hosts.reduce((sum, h) => sum + h.total_files, 0);
+            const totalSizeGB = hosts.reduce((sum, h) => sum + h.total_size_gb, 0);
+            const totalReports = hosts.reduce((sum, h) => sum + h.report_count, 0);
+
+            const statsHTML = `
+                <div class="stat-card">
+                    <h3>Total Hosts</h3>
+                    <div class="value">${totalHosts}</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Total Files</h3>
+                    <div class="value">${totalFiles.toLocaleString()}</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Total Size (GB)</h3>
+                    <div class="value">${totalSizeGB}</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Total Reports</h3>
+                    <div class="value">${totalReports}</div>
+                </div>
+            `;
+            
+            document.getElementById('globalStats').innerHTML = statsHTML;
+        }
+
+        function displayHosts(hosts) {
+            const hostsHTML = hosts.map(host => `
+                <div class="host-card" onclick="showHostDetails('${host.host_ip}', '${host.host_name}')">
+                    <div class="host-header">
+                        <div>
+                            <div class="host-name">🖥️ ${host.host_name}</div>
+                        </div>
+                        <div class="host-ip">${host.host_ip}</div>
+                    </div>
+                    <div class="host-stats">
+                        <div class="host-stat">
+                            <div class="host-stat-label">Total Files</div>
+                            <div class="host-stat-value">${host.total_files.toLocaleString()}</div>
+                        </div>
+                        <div class="host-stat">
+                            <div class="host-stat-label">Size (MB)</div>
+                            <div class="host-stat-value">${host.total_size_mb.toLocaleString()}</div>
+                        </div>
+                        <div class="host-stat">
+                            <div class="host-stat-label">Size (GB)</div>
+                            <div class="host-stat-value">${host.total_size_gb}</div>
+                        </div>
+                        <div class="host-stat">
+                            <div class="host-stat-label">Reports</div>
+                            <div class="host-stat-value">${host.report_count}</div>
+                        </div>
+                    </div>
+                    <div class="last-report">
+                        Last report: ${new Date(host.last_report).toLocaleString()}
+                    </div>
+                </div>
+            `).join('');
+            
+            document.getElementById('hostsList').innerHTML = hostsHTML;
+        }
+
+        async function showHostDetails(ip, name) {
+            try {
+                const response = await fetch(API_URL + '/api/host/reports?ip=' + encodeURIComponent(ip) + '&limit=10');
+                if (!response.ok) throw new Error('Failed to fetch reports');
+                
+                const reports = await response.json();
+                
+                let tableHTML = `
+                    <h2>📋 Reports for ${name} (${ip})</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Files</th>
+                                <th>Size (MB)</th>
+                                <th>Size (GB)</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                if (reports && reports.length > 0) {
+                    reports.forEach(report => {
+                        tableHTML += `
+                            <tr>
+                                <td>${new Date(report.timestamp).toLocaleString()}</td>
+                                <td>${report.total_files.toLocaleString()}</td>
+                                <td>${report.total_size_mb.toLocaleString()}</td>
+                                <td>${report.total_size_gb}</td>
+                                <td><button onclick="showReportDetails(${report.id})">View Details</button></td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tableHTML += '<tr><td colspan="5" style="text-align: center;">No reports found</td></tr>';
+                }
+                
+                tableHTML += `
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('modalContent').innerHTML = tableHTML;
+                document.getElementById('detailModal').style.display = 'block';
+            } catch (error) {
+                showError('Error loading host details: ' + error.message);
+                console.error('Error:', error);
+            }
+        }
+
+        async function showReportDetails(reportId) {
+            try {
+                const response = await fetch(API_URL + '/api/report/details?id=' + reportId);
+                if (!response.ok) throw new Error('Failed to fetch report details');
+                
+                const report = await response.json();
+                
+                let detailsHTML = `
+                    <h2>📄 Report Details - ${report.host_name}</h2>
+                    <p><strong>IP:</strong> ${report.host_ip}</p>
+                    <p><strong>Time:</strong> ${new Date(report.timestamp).toLocaleString()}</p>
+                    <p><strong>Path:</strong> ${report.base_path}</p>
+                    
+                    <h3>Directory Breakdown:</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Directory</th>
+                                <th>File Count</th>
+                                <th>Size (MB)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                if (report.directories && report.directories.length > 0) {
+                    report.directories.forEach(dir => {
+                        detailsHTML += `
+                            <tr>
+                                <td>${dir.path}</td>
+                                <td>${dir.file_count}</td>
+                                <td>${dir.size_mb}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    detailsHTML += '<tr><td colspan="3">No directories</td></tr>';
+                }
+                
+                detailsHTML += `
+                        </tbody>
+                    </table>
+                    
+                    <h3>Totals:</h3>
+                    <table style="width: 50%;">
+                        <tr><td>Total Directories:</td><td>${report.totals.total_directories}</td></tr>
+                        <tr><td>Total Files:</td><td>${report.totals.total_files.toLocaleString()}</td></tr>
+                        <tr><td>Total Size:</td><td>${report.totals.total_size_mb.toLocaleString()} MB (${report.totals.total_size_gb} GB)</td></tr>
+                    </table>
+                `;
+                
+                document.getElementById('modalContent').innerHTML = detailsHTML;
+                document.getElementById('detailModal').style.display = 'block';
+            } catch (error) {
+                showError('Error loading report details: ' + error.message);
+                console.error('Error:', error);
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').style.display = 'none';
+        }
+
+        function showError(message) {
+            const errorMsg = document.getElementById('errorMsg');
+            errorMsg.textContent = message;
+            errorMsg.style.display = 'block';
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('detailModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // Load dashboard on page load
+        loadDashboard();
+        
+        // Auto-refresh every 30 seconds
+        setInterval(loadDashboard, 30000);
+    </script>
+</body>
+</html>
