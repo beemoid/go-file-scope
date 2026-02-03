@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 type Config struct {
@@ -41,7 +41,7 @@ type HostSummary struct {
 	LastReport  time.Time `json:"last_report"`
 	TotalFiles  int       `json:"total_files"`
 	TotalSizeMB int       `json:"total_size_mb"`
-	TotalSizeGB int       `json:"total_size_gb"`
+	TotalSizeGB float64   `json:"total_size_gb"`
 	ReportCount int       `json:"report_count"`
 }
 
@@ -51,7 +51,7 @@ var config Config
 // Initialize database
 func initDB(dbPath string) error {
 	var err error
-	db, err = sql.Open("sqlite3", dbPath)
+	db, err = sql.Open("sqlite", dbPath)
 	if err != nil {
 		return err
 	}
@@ -372,7 +372,7 @@ func getHostsHandler(w http.ResponseWriter, r *http.Request) {
 		totalFiles := 0
 		totalSizeBytes := int64(0)
 		totalSizeMB := 0
-		totalSizeGB := 0
+		totalSizeGB := float64(0)
 
 		for _, dir := range report.Directories {
 			totalFiles += dir.FileCount
@@ -381,7 +381,7 @@ func getHostsHandler(w http.ResponseWriter, r *http.Request) {
 
 		if totalSizeBytes > 0 {
 			totalSizeMB = int(totalSizeBytes / 1048576)
-			totalSizeGB = int(totalSizeBytes / 1073741824)
+			totalSizeGB = float64(totalSizeBytes / 1073741824)
 		}
 
 		// Count reports per host
@@ -463,7 +463,7 @@ func getHostReportsHandler(w http.ResponseWriter, r *http.Request) {
 		var totalFiles int
 		var totalSizeBytes int64
 		totalSizeMB := 0
-		totalSizeGB := 0.0
+		totalSizeGB := float64(0.0)
 
 		if err := json.Unmarshal([]byte(reportDataStr), &report); err == nil {
 			for _, dir := range report.Directories {

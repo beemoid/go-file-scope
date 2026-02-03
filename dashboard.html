@@ -1,19 +1,42 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Dashboard</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📁</text></svg>">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #f5f5f5;
             padding: 20px;
         }
-        .container { max-width: 1400px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-        h1 { color: #333; font-size: 32px; }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 32px;
+        }
+
         .nav-link {
             display: inline-block;
             padding: 10px 20px;
@@ -23,47 +46,118 @@
             text-decoration: none;
             margin-left: 10px;
         }
-        .nav-link:hover { background: #7B1FA2; }
-        .controls { margin-bottom: 20px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .control-group { display: inline-block; margin-right: 20px; margin-bottom: 10px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
-        input, select { padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 200px; }
-        button { background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px; }
-        button:hover { background: #45a049; }
-        .export-btn { background: #2196F3; }
-        .export-btn:hover { background: #1976D2; }
-        .refresh-btn { background: #FF9800; }
-        .refresh-btn:hover { background: #F57C00; }
+
+        .nav-link:hover {
+            background: #7B1FA2;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .control-group {
+            display: inline-block;
+            margin-right: 20px;
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        input,
+        select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+        }
+
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+
+        .export-btn {
+            background: #2196F3;
+        }
+
+        .export-btn:hover {
+            background: #1976D2;
+        }
+
+        .refresh-btn {
+            background: #FF9800;
+        }
+
+        .refresh-btn:hover {
+            background: #F57C00;
+        }
+
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
+
         .stat-card {
             background: white;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        .stat-card h3 { color: #666; font-size: 14px; margin-bottom: 10px; text-transform: uppercase; }
-        .stat-card .value { font-size: 32px; font-weight: bold; color: #4CAF50; }
-        .clients-section { margin-top: 30px; }
+
+        .stat-card h3 {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .clients-section {
+            margin-top: 30px;
+        }
+
         .client-card {
             background: white;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
             cursor: pointer;
             transition: all 0.3s;
             border-left: 4px solid #ddd;
         }
-        .client-card:hover { 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+
+        .client-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             transform: translateY(-2px);
             border-left-color: #2196F3;
         }
+
         .client-header {
             display: flex;
             justify-content: space-between;
@@ -72,26 +166,68 @@
             padding-bottom: 15px;
             border-bottom: 2px solid #f0f0f0;
         }
-        .client-ip { font-size: 18px; font-weight: bold; color: #333; font-family: 'Courier New', monospace; }
-        .client-time { color: #999; font-size: 12px; }
+
+        .client-ip {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            font-family: 'Courier New', monospace;
+        }
+
+        .client-time {
+            color: #999;
+            font-size: 12px;
+        }
+
         .client-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 10px;
             margin-bottom: 15px;
         }
+
         .stat-item {
             padding: 10px;
             background: #f9f9f9;
             border-radius: 4px;
             border-left: 4px solid #4CAF50;
         }
-        .stat-label { font-size: 12px; color: #666; }
-        .stat-value { font-size: 18px; font-weight: bold; color: #333; }
-        .toggle-details { background: #2196F3; padding: 8px 12px; border-radius: 4px; color: white; cursor: pointer; font-size: 12px; }
-        .toggle-details:hover { background: #1976D2; }
-        .details-section { display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; }
-        .details-section.expanded { display: block; }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .toggle-details {
+            background: #2196F3;
+            padding: 8px 12px;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .toggle-details:hover {
+            background: #1976D2;
+        }
+
+        .details-section {
+            display: none;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .details-section.expanded {
+            display: block;
+        }
+
         .directory-list {
             background: #f9f9f9;
             border-radius: 4px;
@@ -100,6 +236,7 @@
             max-height: 400px;
             overflow-y: auto;
         }
+
         .directory-item {
             padding: 8px;
             border-bottom: 1px solid #eee;
@@ -107,38 +244,92 @@
             justify-content: space-between;
             align-items: center;
         }
-        .directory-item:last-child { border-bottom: none; }
-        .directory-path { flex: 1; font-family: 'Courier New', monospace; font-size: 12px; }
-        .directory-stats { text-align: right; font-size: 12px; color: #666; }
-        table { width: 100%; border-collapse: collapse; background: white; margin-top: 10px; }
-        th { background: #f5f5f5; padding: 12px; text-align: left; border-bottom: 2px solid #ddd; font-weight: bold; }
-        td { padding: 10px 12px; border-bottom: 1px solid #eee; }
-        tr:hover { background: #f9f9f9; }
-        .loading { text-align: center; padding: 40px; color: #666; }
-        .error { background: #ffebee; color: #c62828; padding: 15px; border-radius: 6px; margin-bottom: 20px; display: none; }
-        .pagination { margin-top: 20px; text-align: center; }
-        .pagination button { margin: 0 2px; }
+
+        .directory-item:last-child {
+            border-bottom: none;
+        }
+
+        .directory-path {
+            flex: 1;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .directory-stats {
+            text-align: right;
+            font-size: 12px;
+            color: #666;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            margin-top: 10px;
+        }
+
+        th {
+            background: #f5f5f5;
+            padding: 12px;
+            text-align: left;
+            border-bottom: 2px solid #ddd;
+            font-weight: bold;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        tr:hover {
+            background: #f9f9f9;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .pagination {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .pagination button {
+            margin: 0 2px;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
             <h1>📊 File Counter and File Size Scoping Dashboard</h1>
             <a href="/logs" class="nav-link">📋 View Logs</a>
         </div>
-        
+
         <div class="error" id="errorMsg"></div>
-        
+
         <div class="controls">
             <div class="control-group">
-                <label>Filter by Host IP:</label>
-                <input type="text" id="filterHost" placeholder="192.168.1.100">
+                <label>Filter by Machine IP:</label>
+                <input type="text" id="filterHost" placeholder="xxx.xxx.xxx.xxx">
             </div>
             <div class="control-group">
                 <label>Items per page:</label>
                 <select id="pageSize">
                     <option value="10">10</option>
-                    <option value="25" selected>25</option>
+                    <option value="25">25</option>
                     <option value="50">50</option>
                     <option value="100">100</option>
                 </select>
@@ -146,11 +337,11 @@
             <button onclick="loadDashboard()" class="refresh-btn">🔄 Refresh</button>
             <button onclick="exportAllCSV()" class="export-btn">📥 Export All Data</button>
         </div>
-        
+
         <div class="stats-grid" id="globalStats">
             <div class="loading">Loading statistics...</div>
         </div>
-        
+
         <div class="clients-section">
             <h2 style="margin-bottom: 20px;">Received machine lists...</h2>
             <div id="clientsList">
@@ -164,23 +355,23 @@
         const API_URL = 'http://localhost:5555';
         let allClients = [];
         let currentPage = 1;
-        let pageSize = 25;
+        let pageSize = 10;
 
         async function loadDashboard() {
             document.getElementById('errorMsg').style.display = 'none';
-            
+
             try {
                 const response = await fetch(API_URL + '/api/hosts');
                 if (!response.ok) throw new Error('Failed to fetch clients');
-                
+
                 allClients = await response.json() || [];
-                
+
                 // Display stats
                 displayGlobalStats(allClients);
-                
+
                 // Filter and paginate
                 filterAndDisplayClients();
-                
+
             } catch (error) {
                 showError('Error loading dashboard: ' + error.message);
                 console.error('Error:', error);
@@ -217,14 +408,14 @@
                     <div class="value">${totalReports}</div>
                 </div>
             `;
-            
+
             document.getElementById('globalStats').innerHTML = statsHTML;
         }
 
         function filterAndDisplayClients() {
             const filterHost = document.getElementById('filterHost').value.toLowerCase();
             pageSize = parseInt(document.getElementById('pageSize').value);
-            
+
             let filtered = allClients;
             if (filterHost) {
                 filtered = allClients.filter(c => c.host_ip.toLowerCase().includes(filterHost));
@@ -248,10 +439,21 @@
             }
 
             let html = '';
+            let optionsDate =
+            {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                timeZone: "Asia/Jakarta"
+            };
             clients.forEach(client => {
-                const lastReport = new Date(client.last_report).toLocaleString();
+                const lastReport = new Date(client.last_report).toLocaleString('id-ID', optionsDate);
                 const totalSize = client.total_size_mb ? (client.total_size_mb / 1024).toFixed(2) : '0';
-                
+
                 html += `
                     <div class="client-card" onclick="toggleDetails(event, '${client.host_ip}')">
                         <div class="client-header">
@@ -272,7 +474,7 @@
                             </div>
                             <div class="stat-item">
                                 <div class="stat-label">Size (GB)</div>
-                                <div class="stat-value">${(client.total_size_gb || 0).toLocaleString()}</div>
+                                <div class="stat-value">${client.total_size_gb || '0.00'}</div>
                             </div>
                             <div class="stat-item">
                                 <div class="stat-label">Reports</div>
@@ -296,9 +498,9 @@
             const dirsId = 'dirs-' + hostIP.replace(/\./g, '-');
             const details = document.getElementById(detailsId);
             const button = card.querySelector('.toggle-details');
-            
+
             details.classList.toggle('expanded');
-            
+
             if (details.classList.contains('expanded')) {
                 button.textContent = 'Hide Details ▲';
                 loadClientDetails(hostIP);
@@ -315,7 +517,7 @@
             try {
                 const response = await fetch(API_URL + '/api/host/reports?ip=' + encodeURIComponent(hostIP) + '&limit=1');
                 if (!response.ok) throw new Error('Failed to fetch details');
-                
+
                 const reports = await response.json() || [];
                 if (reports.length === 0) {
                     container.innerHTML = '<p>No reports available</p>';
@@ -327,11 +529,12 @@
 
                 let html = '';
                 if (directories && directories.length > 0) {
-                    html = '<table style="width:100%; border-collapse: collapse;"><thead><tr style="background:#f0f0f0;"><th style="padding:8px; text-align:left; border:1px solid #ddd;">Directory</th><th style="padding:8px; text-align:center; border:1px solid #ddd;">Files</th><th style="padding:8px; text-align:right; border:1px solid #ddd;">Size (MB)</th><th style="padding:8px; text-align:right; border:1px solid #ddd;">Size (GB)</th></tr></thead><tbody>';
+                    html = '<table style="width:100%; border-collapse: collapse;"><thead><tr style="background:#f0f0f0;"><th style="padding:8px; text-align:left; border:1px solid #ddd;">No</th><th style="padding:8px; text-align:left; border:1px solid #ddd;">Directory</th><th style="padding:8px; text-align:center; border:1px solid #ddd;">Files</th><th style="padding:8px; text-align:right; border:1px solid #ddd;">Size (MB)</th><th style="padding:8px; text-align:right; border:1px solid #ddd;">Size (GB)</th></tr></thead><tbody>';
                     directories.forEach(dir => {
                         const sizeGB = (dir.size_mb / 1024).toFixed(2);
                         html += `
                             <tr>
+                                <td style="padding:8px; border:1px solid #ddd; font-family: monospace; font-size:12px;">${directories.indexOf(dir) + 1}</td>
                                 <td style="padding:8px; border:1px solid #ddd; font-family: monospace; font-size:12px;">${dir.path}</td>
                                 <td style="padding:8px; border:1px solid #ddd; text-align:center;">${dir.file_count.toLocaleString()}</td>
                                 <td style="padding:8px; border:1px solid #ddd; text-align:right;">${dir.size_mb.toLocaleString()}</td>
@@ -359,12 +562,12 @@
             }
 
             let html = `<small>Page ${currentPage} of ${pages} | Total: ${total} items</small><br>`;
-            
+
             if (currentPage > 1) {
                 html += `<button onclick="currentPage=1; filterAndDisplayClients();">First</button>
-                         <button onclick="currentPage=${currentPage-1}; filterAndDisplayClients();">Previous</button>`;
+                         <button onclick="currentPage=${currentPage - 1}; filterAndDisplayClients();">Previous</button>`;
             }
-            
+
             for (let i = Math.max(1, currentPage - 2); i <= Math.min(pages, currentPage + 2); i++) {
                 if (i === currentPage) {
                     html += `<button style="background: #666;">${i}</button>`;
@@ -372,9 +575,9 @@
                     html += `<button onclick="currentPage=${i}; filterAndDisplayClients();">${i}</button>`;
                 }
             }
-            
+
             if (currentPage < pages) {
-                html += `<button onclick="currentPage=${currentPage+1}; filterAndDisplayClients();">Next</button>
+                html += `<button onclick="currentPage=${currentPage + 1}; filterAndDisplayClients();">Next</button>
                          <button onclick="currentPage=${pages}; filterAndDisplayClients();">Last</button>`;
             }
 
@@ -388,7 +591,7 @@
             }
 
             let csv = 'Host IP,Last Report,Total Files,Size (MB),Size (GB),Reports\n';
-            
+
             for (const client of allClients) {
                 csv += `"${client.host_ip}","${client.last_report}","${client.total_files}","${client.total_size_mb}","${client.total_size_gb}","${client.report_count}"\n`;
             }
@@ -437,9 +640,9 @@
 
         // Load on page load
         loadDashboard();
-        
+
         // Auto-refresh every 30 seconds
-        setInterval(loadDashboard, 30000);
+        <!-- setInterval(loadDashboard, 30000); -->
 
         // Filter on input change
         document.getElementById('filterHost').addEventListener('keyup', () => {
@@ -453,4 +656,5 @@
         });
     </script>
 </body>
+
 </html>
