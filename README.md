@@ -68,15 +68,14 @@ flowchart LR
         BAT[".bat Script"]
     end
     
-    subgraph Server["Go API Server :5555"]
-        API["REST API"]
+    subgraph Server["Server"]
+        API["GO REST API <br> 0.0.0.0:5555"]
         DB[(SQLite DB)]
-        AUDIT["Audit Logs"]
-    end
-    
-    subgraph Dashboard["Web Interface"]
-        DASH["dashboard.html"]
-        LOGS["logs.html"]
+        AUDIT["logs"]
+        subgraph Dashboard["Web Interface"]
+            DASH["dashboard.html"]
+            LOGS["logs.html"]
+        end
     end
     
     BAT -->|POST /command| API
